@@ -1,0 +1,282 @@
+# Node.js React Web App to Linux on Azure
+# Build a Node.js React app and deploy it to Azure as a Linux web app.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
+
+trigger:
+  - main
+
+variables:
+  buildAgent-DEV: 'CORE-BUILDAGENT-WINDOWS-DEV'
+  buildAgent-QA: 'CORE-BUILDAGENT-WINDOWS-QA'
+  buildAgent-UAT: 'CORE-BUILDAGENT-WINDOWS-UAT'
+  buildAgent-PD: 'CORE-BUILDAGENT-WINDOWS-PD'
+  azureServiceConnectionId-DEV: 'ECM Devops'
+  azureServiceConnectionId-QA: 'qa-spoke-application'
+  azureServiceConnectionId-UAT: 'uat-spoke-application'
+  azureServiceConnectionId-PD: 'pd-spoke-application'
+  workingDirectory: $(System.DefaultWorkingDirectory)
+  artifactName: "website-report-manager-ui"
+  artifactName-QA: "website-report-manager-ui-qa"
+  artifactName-UAT: "website-report-manager-ui-uat"
+  artifactName-PD: "website-report-manager-ui-pd"
+  vmImageName: ubuntu-latest
+
+stages:
+  - stage: Build_DEV
+    displayName: Build Dev Stage
+    jobs:
+      - job: Build_DEV_Job
+        displayName: Build
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "18.x"
+            displayName: "Install Node.js"
+          - script: |
+              npm install
+              npm run build:dev --if-present
+            displayName: "npm install, build"
+            workingDirectory: $(workingDirectory)
+          - task: CopyFiles@2
+            displayName: "Copy site files to artifact directory"
+            inputs:
+              SourceFolder: "$(System.DefaultWorkingDirectory)/build/"
+              Contents: "$(System.DefaultWorkingDirectory)/build/**/*"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/output-site"
+              CleanTargetFolder: true 
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(Build.ArtifactStagingDirectory)/output-site"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/DEV$(Build.BuildId).zip
+              replaceExistingArchive: true
+          
+          - task: PublishPipelineArtifact@0
+            displayName: "Publish site pipeline artifacts"
+            inputs:
+              artifactName: $(artifactName)
+              targetPath: "$(Build.ArtifactStagingDirectory)/DEV$(Build.BuildId).zip"
+
+  - stage: DEV
+    displayName: Deploy to DEV
+    variables:
+    - group: ReportManagerWebApp-DEV
+    dependsOn: Build_DEV
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy
+        environment: 'DEV'
+        pool:
+          name: $(buildAgent-DEV)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: "Azure App Service Deploy to DEV"
+                  inputs:
+                    azureSubscription: $(azureServiceConnectionId-DEV)
+                    appType: webAppLinux
+                    appName: $(webAppName)
+                    resourceGroupName: $(resourceGroupName)
+                    package: "$(Pipeline.Workspace)/**/*.zip"
+                    RuntimeStack: 'NODE|18-lts'
+                    StartupCommand: 'pm2 serve /home/site/wwwroot --no-daemon --spa'
+  - stage: Build_QA
+    displayName: Build QA Stage
+    jobs:
+      - job: Build_QA_Job
+        displayName: Build
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "18.x"
+            displayName: "Install Node.js"
+          - script: |
+              npm install
+              npm run build:qa --if-present
+            displayName: "npm install, build"
+            workingDirectory: $(workingDirectory)
+          - task: CopyFiles@2
+            displayName: "Copy site files to artifact directory"
+            inputs:
+              SourceFolder: "$(System.DefaultWorkingDirectory)/build/"
+              Contents: "$(System.DefaultWorkingDirectory)/build/**/*"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/output-site"
+              CleanTargetFolder: true 
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(Build.ArtifactStagingDirectory)/output-site"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/QA$(Build.BuildId).zip
+              replaceExistingArchive: true
+          
+          - task: PublishPipelineArtifact@0
+            displayName: "Publish site pipeline artifacts"
+            inputs:
+              artifactName: $(artifactName-QA)
+              targetPath: "$(Build.ArtifactStagingDirectory)/QA$(Build.BuildId).zip"                  
+  - stage: QA
+    displayName: Deploy QA stage
+    variables:
+    - group: ReportManagerWebApp-QA
+    dependsOn: Build_QA
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy
+        environment: 'QA'
+        pool:
+          name: $(buildAgent-QA)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: "Azure App Service Deploy to QA"
+                  inputs:
+                    azureSubscription: $(azureServiceConnectionId-QA)
+                    appType: webAppLinux
+                    appName: $(webAppName)
+                    resourceGroupName: $(resourceGroupName)
+                    package: "$(Pipeline.Workspace)/$(artifactName-QA)/*.zip"
+                    RuntimeStack: 'NODE|18-lts'
+                    StartupCommand: 'pm2 serve /home/site/wwwroot --no-daemon --spa'
+  - stage: Build_UAT
+    displayName: Build UAT Stage
+    jobs:
+      - job: Build_UAT_Job
+        displayName: Build
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "18.x"
+            displayName: "Install Node.js"
+          - script: |
+              npm install
+              npm run build:uat --if-present
+            displayName: "npm install, build"
+            workingDirectory: $(workingDirectory)
+          - task: CopyFiles@2
+            displayName: "Copy site files to artifact directory"
+            inputs:
+              SourceFolder: "$(System.DefaultWorkingDirectory)/build/"
+              Contents: "$(System.DefaultWorkingDirectory)/build/**/*"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/output-site"
+              CleanTargetFolder: true 
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(Build.ArtifactStagingDirectory)/output-site"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/UAT$(Build.BuildId).zip
+              replaceExistingArchive: true
+          
+          - task: PublishPipelineArtifact@0
+            displayName: "Publish site pipeline artifacts"
+            inputs:
+              artifactName: $(artifactName-UAT)
+              targetPath: "$(Build.ArtifactStagingDirectory)/UAT$(Build.BuildId).zip"
+  - stage: UAT
+    displayName: Deploy UAT stage
+    variables:
+    - group: ReportManagerWebApp-UAT
+    dependsOn: Build_UAT
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy
+        environment: 'UAT'
+        pool:
+          name: $(buildAgent-UAT)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: "Azure App Service Deploy to UAT"
+                  inputs:
+                    azureSubscription: $(azureServiceConnectionId-UAT)
+                    appType: webAppLinux
+                    appName: $(webAppName)
+                    resourceGroupName: $(resourceGroupName)
+                    package: "$(Pipeline.Workspace)/$(artifactName-UAT)/*.zip"
+                    RuntimeStack: 'NODE|18-lts'
+                    StartupCommand: 'pm2 serve /home/site/wwwroot --no-daemon --spa' 
+  - stage: Build_PROD
+    displayName: Build PROD Stage
+    jobs:
+      - job: Build_PROD_Job
+        displayName: Build
+        pool:
+          vmImage: $(vmImageName)
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "18.x"
+            displayName: "Install Node.js"
+          - script: |
+              npm install
+              npm run build:prod --if-present
+            displayName: "npm install, build"
+            workingDirectory: $(workingDirectory)
+          - task: CopyFiles@2
+            displayName: "Copy site files to artifact directory"
+            inputs:
+              SourceFolder: "$(System.DefaultWorkingDirectory)/build/"
+              Contents: "$(System.DefaultWorkingDirectory)/build/**/*"
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/output-site"
+              CleanTargetFolder: true 
+          - task: ArchiveFiles@2
+            displayName: "Archive files"
+            inputs:
+              rootFolderOrFile: "$(Build.ArtifactStagingDirectory)/output-site"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/PD$(Build.BuildId).zip
+              replaceExistingArchive: true
+          
+          - task: PublishPipelineArtifact@0
+            displayName: "Publish site pipeline artifacts"
+            inputs:
+              artifactName: $(artifactName-PD)
+              targetPath: "$(Build.ArtifactStagingDirectory)/PD$(Build.BuildId).zip"
+  - stage: Production
+    displayName: Deploy Prod stage
+    variables:
+    - group: ReportManagerWebApp-PD
+    dependsOn: Build_PROD
+    condition: succeeded()
+    jobs:
+      - deployment: Deploy
+        displayName: Deploy
+        environment: 'PROD'
+        pool:
+          name: $(buildAgent-PD)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  displayName: "Azure App Service Deploy to Prod"
+                  inputs:
+                    azureSubscription: $(azureServiceConnectionId-PD)
+                    appType: webAppLinux
+                    appName: $(webAppName)
+                    resourceGroupName: $(resourceGroupName)
+                    package: "$(Pipeline.Workspace)/$(artifactName-PD)/*.zip"
+                    RuntimeStack: 'NODE|18-lts'
+                    StartupCommand: 'pm2 serve /home/site/wwwroot --no-daemon --spa' 
