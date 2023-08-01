@@ -1,0 +1,80 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Poppins&display=swap");
+
+:root {
+  --body-bg: #f5f8ff;
+  --box-bg: #fff;
+  --input-bg: #f5f8ff;
+  --txt-color: #2f2d2f;
+  --txt-second-color: #ccc;
+  --border-color: #4267b2;
+  --box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+}
+
+* {
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Poppins", sans-serif;
+}
+
+.dropBody {
+  font-family: "Poppins", sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  background-color: var(--box-bg);
+  color: var(--txt-color);
+
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding-top: 0.5em;
+
+  min-height: 40vh;
+}
+
+.box {
+  background-color: var(--box-bg);
+  border-radius: 20px;
+  box-shadow: var(--box-shadow);
+}
+
+.confirmation-box {
+  background-color: "#fff";
+  padding: 50;
+  text-align: "center";
+  p: 2;
+  border: 1;
+  margin-top: 5;
+  border-color: "#D3D3D3";
+  border-radius: 2;
+}
+
+.img {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 25px;
+}
+
+css-83ijpv-MuiTypography-root {
+  color: #fff;
+}
+
+.spinner {
+  display: flex;
+  direction: row;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.cont2 {
+  background-color: lightskyblue;
+}
+.cont3 {
+  background-color: white;
+}
